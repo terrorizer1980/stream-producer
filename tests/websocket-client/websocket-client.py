@@ -18,7 +18,7 @@ import websockets
 __all__ = []
 __version__ = "1.0.0"  # See https://www.python.org/dev/peps/pep-0396/
 __date__ = '2021-01-18'
-__updated__ = '2021-01-19'
+__updated__ = '2021-01-20'
 
 SENZING_PRODUCT_ID = "9999"  # See https://github.com/Senzing/knowledge-base/blob/master/lists/senzing-product-ids.md
 log_format = '%(asctime)s %(message)s'
@@ -173,6 +173,7 @@ MESSAGE_DEBUG = 900
 
 message_dictionary = {
     "100": "senzing-" + SENZING_PRODUCT_ID + "{0:04d}I",
+    "150": ">>>>>>>>>>>>>>>>>>>>>>>> Reconnecting to {0}.",
     "292": "Configuration change detected.  Old: {0} New: {1}",
     "293": "For information on warnings and errors, see https://github.com/Senzing/stream-loader#errors",
     "294": "Version: {0}  Updated: {1}",
@@ -184,6 +185,7 @@ message_dictionary = {
     "300": "senzing-" + SENZING_PRODUCT_ID + "{0:04d}W",
     "499": "{0}",
     "500": "senzing-" + SENZING_PRODUCT_ID + "{0:04d}E",
+    "694": "Error: {0}",
     "695": "Unknown database scheme '{0}' in database url '{1}'",
     "696": "Bad SENZING_SUBCOMMAND: {0}.",
     "697": "No processing done.",
@@ -433,14 +435,32 @@ def exit_silently():
 # WebSocket test clients
 # -----------------------------------------------------------------------------
 
+async def websocket_send_1(uri, filename):
+    async with websockets.connect(uri) as websocket:
+        with open(filename, 'r') as input_file:
+            counter = 0
+            for line in input_file:
+                counter += 1
+                try:
+                    await websocket.send(line)
+                    print(f"{counter} sent: {line}")
+                except websockets.exceptions.ConnectionClosedError as err:
+                    logging.info(message_info(150, uri))
+                    time.sleep(60)
+                    websocket = websockets.connect(uri)
+                    await websocket.send(line)
+                    print(f"{counter} sent: {line}")
+                except Exception as err:
+                    exit_error(694, err)
+
+#               response = await websocket.recv()
+#               print(f"<<< {response}")
 
 async def websocket_send(uri, filename):
     async with websockets.connect(uri) as websocket:
         with open(filename, 'r') as input_file:
-            for line in input_file:
+            await websocket.send(input_file.read())
 
-                await websocket.send(line)
-                print(f"sent: {line}")
 
 #               response = await websocket.recv()
 #               print(f"<<< {response}")
@@ -486,7 +506,25 @@ def do_websocket_client(args):
 
     websocket_url = f"ws://{websocket_host}:{websocket_port}"
 
-    asyncio.get_event_loop().run_until_complete(websocket_send(websocket_url, input_file))
+#     asyncio.get_event_loop().run_until_complete(websocket_send(websocket_url, input_file))
+
+    web_socket = websockets.connect(websocket_url)
+    with open(input_file, 'r') as file:
+        counter = 0
+        for line in file:
+            counter += 1
+            try:
+                web_socket.send(line)
+                print(f"{counter} sent: {line}")
+            except websockets.exceptions.ConnectionClosedError as err:
+                logging.info(message_info(150, websocket_url))
+                time.sleep(60)
+                web_socket = websockets.connect(websocket_url)
+                web_socket.send(line)
+                print(f"{counter} sent: {line}")
+            except Exception as err:
+                exit_error(694, err)
+    web_socket.close()
 
     # Epilog.
 

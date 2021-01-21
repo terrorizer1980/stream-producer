@@ -34,7 +34,7 @@ import websockets
 __all__ = []
 __version__ = "1.3.1"  # See https://www.python.org/dev/peps/pep-0396/
 __date__ = '2020-04-07'
-__updated__ = '2021-01-19'
+__updated__ = '2021-01-20'
 
 SENZING_PRODUCT_ID = "5014"  # See https://github.com/Senzing/knowledge-base/blob/master/lists/senzing-product-ids.md
 log_format = '%(asctime)s %(message)s'
@@ -1233,6 +1233,7 @@ class ReadWebsocketMixin():
         self.websocket_host = config.get("websocket_host")
         self.websocket_port = config.get("websocket_port")
         self.local_queue = multiprocessing.Queue()
+        self.counter = 0
 
         # Start websocket server.
 
@@ -1246,6 +1247,8 @@ class ReadWebsocketMixin():
 
     def read(self):
         while True:
+            self.counter += 1
+            logging.info(message_info(999, self.counter))
             record = self.local_queue.get(block=True)
             yield record
 
