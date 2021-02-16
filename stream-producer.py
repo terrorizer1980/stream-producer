@@ -53,6 +53,16 @@ QUEUE_SENTINEL = ".{0}.".format(''.join([random.choice(string.ascii_letters + st
 # 1) Command line options, 2) Environment variables, 3) Configuration files, 4) Default values
 
 configuration_locator = {
+    "csv_rows_in_chunk": {
+        "default": 10000,
+        "env": "SENZING_CSV_ROWS_IN_CHUNK",
+        "cli": "csv-rows-in-chunk"
+    },
+    "csv_delimiter": {
+        "default": ",",
+        "env": "SENZING_CSV_DELIMITER",
+        "cli": "csv-delimiter"
+    },
     "debug": {
         "default": False,
         "env": "SENZING_DEBUG",
@@ -82,6 +92,11 @@ configuration_locator = {
         "default": "localhost:9092",
         "env": "SENZING_KAFKA_BOOTSTRAP_SERVER",
         "cli": "kafka-bootstrap-server",
+    },
+    "kafka_group": {
+        "default": "senzing-kafka-group",
+        "env": "SENZING_KAFKA_GROUP",
+        "cli": "kafka-group"
     },
     "kafka_poll_interval": {
         "default": 100,
@@ -423,6 +438,11 @@ def get_parser():
                 "metavar": "SENZING_KAFKA_BOOTSTRAP_SERVER",
                 "help": "Kafka bootstrap server. Default: localhost:9092"
             },
+            "--kafka-group": {
+                "dest": "kafka_group",
+                "metavar": "SENZING_KAFKA_GROUP",
+                "help": "Kafka group. Default: senzing-kafka-group"
+            },
             "--kafka-topic": {
                 "dest": "kafka_topic",
                 "metavar": "SENZING_KAFKA_TOPIC",
@@ -490,6 +510,18 @@ def get_parser():
                 "help": "Port to listen on. Default: 8255"
             },
         },
+        "csv": {
+            "--csv-rows-in-chunk": {
+                "dest": "csv_rows_in_chunk",
+                "metavar": "SENZING_CSV_ROWS_IN_CHUNK",
+                "help": "The number of csv lines to read into memory and process at one time. Default: 10000"
+            },
+            "--csv-delimiter": {
+                "dest": "csv_delimiter",
+                "metavar": "SENZING_CSV_DELIMITER",
+                "help": "The character used to separate column values in a csv row. Default: ,"
+            }
+        }
     }
 
     # Augment "subcommands" variable with arguments specified by aspects.
@@ -705,6 +737,7 @@ def get_configuration(args):
     # Special case: Change integer strings to integers.
 
     integers = [
+        'csv_rows_in_chunk',
         'delay_in_seconds',
         'kafka_poll_interval',
         'monitoring_period_in_seconds',
@@ -1015,18 +1048,25 @@ class ReadFileCsvMixin():
         self.input_url = config.get('input_url')
         self.record_min = config.get('record_min')
         self.record_max = config.get('record_max')
+        self.rows_in_chunk = config.get('csv_rows_in_chunk')
+        self.delimiter = config.get('csv_delimiter')
         self.counter = 0
 
     def read(self):
-        data_frame = pandas.read_csv(self.input_url, skipinitialspace=True)
-        for row in data_frame.to_dict(orient="records"):
-            self.counter += 1
-            if self.record_min and self.counter < self.record_min:
-                continue
-            if self.record_max and self.counter > self.record_max:
-                break
-            assert type(row) == dict
-            yield row
+        with pandas.read_csv(self.input_url, skipinitialspace=True, dtype=str, chunksize=self.rows_in_chunk, delimiter=self.delimiter) as reader:
+            for data_frame in reader:
+                data_frame.fillna('', inplace=True)
+                for row in data_frame.to_dict(orient="records"):
+                    # Remove items that have '' value
+                    row = {i:j for i,j in row.items() if j != ''}
+
+                    self.counter += 1
+                    if self.record_min and self.counter < self.record_min:
+                        continue
+                    if self.record_max and self.counter > self.record_max:
+                        break
+                    assert type(row) == dict
+                    yield row
 
 # -----------------------------------------------------------------------------
 # Class: ReadFileMixin
@@ -1358,8 +1398,8 @@ class PrintKafkaMixin():
         kafka_configuration = {
             'bootstrap.servers': config.get('kafka_bootstrap_server')
         }
-        if config.get('kafka_group_id'):
-            kafka_configuration['group.id'] = config.get('kafka_group_id')
+        if config.get('kafka_group'):
+            kafka_configuration['group.id'] = config.get('kafka_group')
 
         self.kafka_producer = confluent_kafka.Producer(kafka_configuration)
 
