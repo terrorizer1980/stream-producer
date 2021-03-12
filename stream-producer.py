@@ -1346,12 +1346,6 @@ class EvaluateJsonToDictMixin():
 
     def __init__(self, *args, **kwargs):
         logging.debug(message_debug(996, threading.current_thread().name, "EvaluateJsonToDictMixin"))
-        self.de
-
-        self.default_data_source = self.config.get('default_data_source', False)
-
-        !!!
-
 
     def evaluate(self, message):
         return json.loads(message)
