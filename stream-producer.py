@@ -33,7 +33,7 @@ import urllib.request
 import websockets
 
 __all__ = []
-__version__ = "1.3.3"  # See https://www.python.org/dev/peps/pep-0396/
+__version__ = "1.4.0"  # See https://www.python.org/dev/peps/pep-0396/
 __date__ = '2020-04-07'
 __updated__ = '2021-03-12'
 
@@ -1319,8 +1319,17 @@ class EvaluateDictToJsonMixin():
 
     def __init__(self, *args, **kwargs):
         logging.debug(message_debug(996, threading.current_thread().name, "EvaluateDictToJsonMixin"))
+        self.default_data_source = self.config.get('default_data_source', None)
+        self.default_entity_type = self.config.get('default_entity_type', None)
 
     def evaluate(self, message):
+
+        if self.default_data_source:
+            if 'DATA_SOURCE' not in message.keys():
+                message['DATA_SOURCE'] = self.default_data_source
+        if self.default_entity_type:
+            if 'ENTITY_TYPE' not in message.keys():
+                message['ENTITY_TYPE'] = self.default_entity_type
         return json.dumps(message)
 
 # -----------------------------------------------------------------------------
@@ -1350,7 +1359,7 @@ class EvaluateJsonToDictMixin():
 class EvaluateNullObjectMixin():
 
     def __init__(self, *args, **kwargs):
-        logging.debug(message_debug(996, threading.current_thread().name, "EvaluateDictToJsonMixin"))
+        logging.debug(message_debug(996, threading.current_thread().name, "EvaluateNullObjectMixin"))
 
     def evaluate(self, message):
         return message
